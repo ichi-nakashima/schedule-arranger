@@ -7,6 +7,24 @@ var helmet = require('helmet');
 var session = require('express-session');
 var passport = require('passport');
 
+// モデルの読み込み
+var User = require('./models/user');
+var Schedule = require('./models/schedule');
+var Availability = require('./models/availabilitiy');
+var Candidate = require('./models/candidate');
+var Comment = require('./models/comment');
+User.sync().then(() => {
+  Schedule.belongsTo(User, { foreignKey: 'createdBy'});// User に依存・外部キー
+  Schedule.sync();
+  Comment.belongsTo(User, { foreignKey: 'userId'}); // User に依存・外部キー
+  Comment.sync();
+  Availability.belongsTo(User, { foreignKey: 'userId'});
+  Candidate.sync().then(() => {
+    Availability.belongsTo(Candidate, {foreignKey: 'candidateId'});
+    Availability.sync();
+  });
+});
+
 var GitHubStrategy = require('passport-github2').Strategy;
 var GITHUB_CLIENT_ID = '6c43da9619c0a0b8fb09';
 var GITHUB_CLIENT_SECRET = '83f7e26a910cf71fb32aaab77d9f0674bc8d4e19';
@@ -25,7 +43,14 @@ passport.use(new GitHubStrategy({
   callbackURL: 'http://localhost:8000/auth/github/callback'
 },
   function (accessToken, refreshToken, profile, done) {
-    return done(null, profile);
+    process.nextTick(function () {
+        User.upsert({
+          userId: profile.id,
+          username: profile.username
+        }).then(() => {
+            done(null, profile);
+        });
+    });
   }
 ));
 
